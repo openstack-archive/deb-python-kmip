@@ -27,7 +27,7 @@ ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
 	set -e ; for i in $(PYTHONS) $(PYTHON3S) ; do \
 		PYMAJOR=`echo $$i | cut -d'.' -f1` ; \
 		echo "===> Testing with python$$i (python$$PYMAJOR)" ; \
-		py.test-$$i
+		py.test-$$i ; \
 	done
 endif
 
