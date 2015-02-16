@@ -1,0 +1,99 @@
+Source: python-kmip
+Section: python
+Priority: optional
+Maintainer: PKG OpenStack <openstack-devel@lists.alioth.debian.org>
+Uploaders: Thomas Goirand <zigo@debian.org>
+Build-Depends: debhelper (>= 9),
+               dh-python,
+               python-all (>= 2.6.6-3~),
+               python-setuptools,
+               python3-all,
+               python3-setuptools
+Build-Depends-Indep: python-coverage,
+                     python-enum34,
+                     python-fixtures,
+                     python-mock,
+                     python-pytest,
+                     python-sqlalchemy,
+                     python-testresources,
+                     python-testscenarios,
+                     python-testtools,
+                     python3-enum34,
+                     python3-fixtures,
+                     python3-mock,
+                     python3-pytest,
+                     python3-sqlalchemy,
+                     python3-testresources,
+                     python3-testscenarios,
+                     python3-testtools,
+                     testrepository
+Standards-Version: 3.9.6
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-kmip.git
+Vcs-Git: git://anonscm.debian.org/openstack/python-kmip.git
+Homepage: https://github.com/OpenKMIP/PyKMIP
+
+Package: python-kmip
+Architecture: all
+Pre-Depends: dpkg (>= 1.15.6~)
+Depends: python-enum34, python-sqlalchemy, ${misc:Depends}, ${python:Depends}
+Description: Key Management Interoperability Protocol - Python 2.x
+ PyKMIP is a Python implementation of the Key Management Interoperability
+ Protocol (KMIP) specification, supporting version 1.1 of the KMIP standard.
+ The KMIP standard is governed by the Organization for the Advancement of
+ Structured Information Standards (OASIS) and specifies a client/server-based
+ protocol to perform key, certificate, and secret object management, including
+ storage and maintenance operations.
+ .
+ The PyKMIP library currently provides a KMIP client and server supporting the
+ following operations for the KMIP SymmetricKey managed object:
+  * Create
+  * Register
+  * Get
+  * Destroy
+ .
+ Note that KMIP specifies profiles that tailor the standard to specific use
+ cases. The KMIP Profile Support section includes several profiles that need to
+ be developed for PyKMIP to fully support symmetric key storage and generation
+ capabilities. A list of operations necessary for these profiles is included.
+ .
+ The PyKMIP software-based KMIP server is intended for use only in testing and
+ demonstration environments. Note that the PyKMIP server is NOT intended to be
+ a substitute for secured, hardware-based KMIP appliances. The PyKMIP client
+ should be used for operational purposes only with a hardware-based KMIP
+ server. The development of the PyKMIP client and server should take place in
+ parallel to facilitate testing of each operation as it is developed.
+ .
+ This package contains the Python 2.x module.
+
+Package: python3-kmip
+Architecture: all
+Pre-Depends: dpkg (>= 1.15.6~)
+Depends: python3-enum34, python3-sqlalchemy, ${misc:Depends}, ${python3:Depends}
+Description: KMIP v1.1 library - Python 3.x
+ PyKMIP is a Python implementation of the Key Management Interoperability
+ Protocol (KMIP) specification, supporting version 1.1 of the KMIP standard.
+ The KMIP standard is governed by the Organization for the Advancement of
+ Structured Information Standards (OASIS) and specifies a client/server-based
+ protocol to perform key, certificate, and secret object management, including
+ storage and maintenance operations.
+ .
+ The PyKMIP library currently provides a KMIP client and server supporting the
+ following operations for the KMIP SymmetricKey managed object:
+  * Create
+  * Register
+  * Get
+  * Destroy
+ .
+ Note that KMIP specifies profiles that tailor the standard to specific use
+ cases. The KMIP Profile Support section includes several profiles that need to
+ be developed for PyKMIP to fully support symmetric key storage and generation
+ capabilities. A list of operations necessary for these profiles is included.
+ .
+ The PyKMIP software-based KMIP server is intended for use only in testing and
+ demonstration environments. Note that the PyKMIP server is NOT intended to be
+ a substitute for secured, hardware-based KMIP appliances. The PyKMIP client
+ should be used for operational purposes only with a hardware-based KMIP
+ server. The development of the PyKMIP client and server should take place in
+ parallel to facilitate testing of each operation as it is developed.
+ .
+ This package contains the Python 3.x module.
