@@ -28,8 +28,8 @@ Build-Depends-Indep: python-coverage,
                      python3-testtools,
                      testrepository
 Standards-Version: 3.9.6
-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-kmip.git
-Vcs-Git: git://anonscm.debian.org/openstack/python-kmip.git
+Vcs-Browser: https://anonscm.debian.org/cgit/openstack/python-kmip.git/
+Vcs-Git: https://anonscm.debian.org/git/openstack/python-kmip.git
 Homepage: https://github.com/OpenKMIP/PyKMIP
 
 Package: python-kmip
