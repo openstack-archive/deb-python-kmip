@@ -1,6 +1,6 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: PyKMIP
-Source: git://github.com/OpenKMIP/PyKMIP.git
+Source: https://github.com/OpenKMIP/PyKMIP
 
 Files: debian/*
 Copyright: (c) 2014, Thomas Goirand <zigo@debian.org>
