@@ -1,6 +1,7 @@
 python-kmip (0.2.0-2) UNRELEASED; urgency=medium
 
   * Fixed VCS URLs (https).
+  * d/rules: Changed UPSTREAM_GIT protocol to https
 
  -- Ondřej Nový <novy@ondrej.org>  Sun, 28 Feb 2016 15:40:55 +0100
 
