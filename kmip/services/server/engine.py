@@ -32,6 +32,7 @@ from kmip.core.factories import secrets
 from kmip.core.messages import contents
 from kmip.core.messages import messages
 
+from kmip.core.messages.payloads import activate
 from kmip.core.messages.payloads import create
 from kmip.core.messages.payloads import create_key_pair
 from kmip.core.messages.payloads import destroy
@@ -1031,6 +1032,45 @@ class KmipEngine(object):
             object_type=attributes.ObjectType(managed_object._object_type),
             unique_identifier=attributes.UniqueIdentifier(unique_identifier),
             secret=core_secret
+        )
+
+        return response_payload
+
+    @_kmip_version_supported('1.0')
+    def _process_activate(self, payload):
+        self._logger.info("Processing operation: Activate")
+
+        if payload.unique_identifier:
+            unique_identifier = payload.unique_identifier.value
+        else:
+            unique_identifier = self._id_placeholder
+
+        object_type = self._get_object_type(unique_identifier)
+
+        managed_object = self._data_session.query(object_type).filter(
+            object_type.unique_identifier == unique_identifier
+        ).one()
+
+        object_type = managed_object._object_type
+        if not hasattr(managed_object, 'state'):
+            raise exceptions.IllegalOperation(
+                "An {0} object has no state and cannot be activated.".format(
+                    ''.join(
+                        [x.capitalize() for x in object_type.name.split('_')]
+                    )
+                )
+            )
+
+        if managed_object.state != enums.State.PRE_ACTIVE:
+            raise exceptions.PermissionDenied(
+                "The object state is not pre-active and cannot be activated."
+            )
+
+        managed_object.state = enums.State.ACTIVE
+        self._data_session.commit()
+
+        response_payload = activate.ActivateResponsePayload(
+            unique_identifier=attributes.UniqueIdentifier(unique_identifier)
         )
 
         return response_payload
