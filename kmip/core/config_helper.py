@@ -13,15 +13,19 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-try:
-    from configparser import SafeConfigParser
-except ImportError:
-    from ConfigParser import SafeConfigParser
 import logging
 import os
 
+from six.moves.configparser import SafeConfigParser
+
 FILE_PATH = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.normpath(os.path.join(FILE_PATH, '../kmipconfig.ini'))
+
+# TODO (peter-hamilton): Remove support for kmipconfig.ini on future release.
+CONFIG_FILE = [
+    os.path.join(os.path.expanduser('~'), '.pykmip', 'pykmip.conf'),
+    os.path.join(os.sep, 'etc', 'pykmip', 'pykmip.conf'),
+    os.path.normpath(os.path.join(FILE_PATH, '../pykmip.conf')),
+    os.path.normpath(os.path.join(FILE_PATH, '../kmipconfig.ini'))]
 
 
 class ConfigHelper(object):
@@ -37,6 +41,9 @@ class ConfigHelper(object):
     DEFAULT_SSL_VERSION = 'PROTOCOL_SSLv23'
     DEFAULT_USERNAME = None
     DEFAULT_PASSWORD = None
+
+    # Timeout measured in seconds
+    DEFAULT_TIMEOUT = 30
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -80,6 +87,7 @@ class ConfigHelper(object):
                 return_value = default_value
                 self.logger.debug(DEFAULT_MSG.format(default_value,
                                                      config_option_name))
+        # TODO (peter-hamilton): Think about adding better value validation
         if return_value == self.NONE_VALUE:
             return None
         else:

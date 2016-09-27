@@ -29,25 +29,27 @@ from kmip.core.enums import ResultStatus as RS
 from kmip.core.factories.attributes import AttributeFactory
 from kmip.core.factories.keys import KeyFactory
 from kmip.core.factories.secrets import SecretFactory
-from kmip.core.keys import RawKey
 
-from kmip.core.messages.contents import KeyFormatType
 from kmip.core.messages.contents import ResultStatus
 from kmip.core.messages.contents import ResultReason
 from kmip.core.messages.contents import ResultMessage
+from kmip.core.messages.contents import ProtocolVersion
+
+from kmip.core.misc import KeyFormatType
 
 from kmip.core.objects import KeyBlock
+from kmip.core.objects import KeyMaterial
 from kmip.core.objects import KeyValue
-from kmip.core.objects import KeyValueStruct
 from kmip.core.objects import TemplateAttribute
-from kmip.core.repo.mem_repo import MemRepo
 from kmip.core.secrets import SymmetricKey
+from kmip.services.server.repo.mem_repo import MemRepo
 from kmip.services.results import CreateResult
 from kmip.services.results import DestroyResult
 from kmip.services.results import GetResult
 from kmip.services.results import OperationResult
 from kmip.services.results import RegisterResult
 from kmip.services.results import LocateResult
+from kmip.services.results import DiscoverVersionsResult
 
 
 class KMIP(object):
@@ -56,34 +58,52 @@ class KMIP(object):
         pass
 
     def create(self, object_type, template_attribute, credential=None):
-        raise NotImplementedError
+        raise NotImplementedError()
+
+    def create_key_pair(self, common_template_attribute,
+                        private_key_template_attribute,
+                        public_key_template_attribute):
+        raise NotImplementedError()
 
     def register(self, object_type, template_attribute, secret,
                  credential=None):
-        raise NotImplementedError
+        raise NotImplementedError()
+
+    def rekey_key_pair(self, private_key_unique_identifier,
+                       offset, common_template_attribute,
+                       private_key_template_attribute,
+                       public_key_template_attribute):
+        raise NotImplementedError()
 
     def get(self, uuid=None, key_format_type=None, key_compression_type=None,
             key_wrapping_specification=None, credential=None):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def destroy(self, uuid, credential=None):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def locate(self, maximum_items=None, storate_status_mask=None,
                object_group_member=None, attributes=None,
                credential=None):
-        raise NotImplementedError
+        raise NotImplementedError()
+
+    def discover_versions(self, protocol_versions=None):
+        raise NotImplementedError()
 
 
 class KMIPImpl(KMIP):
 
     def __init__(self):
-        super(self.__class__, self).__init__()
+        super(KMIPImpl, self).__init__()
         self.logger = logging.getLogger(__name__)
         self.key_factory = KeyFactory()
         self.secret_factory = SecretFactory()
         self.attribute_factory = AttributeFactory()
         self.repo = MemRepo()
+        self.protocol_versions = [
+                ProtocolVersion.create(1, 1),
+                ProtocolVersion.create(1, 0)
+        ]
 
     def create(self, object_type, template_attribute, credential=None):
         self.logger.debug('create() called')
@@ -91,24 +111,18 @@ class KMIPImpl(KMIP):
         bit_length = 256
         attributes = template_attribute.attributes
         ret_attributes = []
-        if object_type.enum != OT.SYMMETRIC_KEY:
+        if object_type.value != OT.SYMMETRIC_KEY:
             self.logger.debug('invalid object type')
             return self._get_invalid_field_result('invalid object type')
         try:
-            alg_attr =\
-                self._validate_req_field(attributes,
-                                         AT.CRYPTOGRAPHIC_ALGORITHM.value,
-                                         (CA.AES.value,),
-                                         'unsupported algorithm')
-            len_attr = self._validate_req_field(attributes,
-                                                AT.CRYPTOGRAPHIC_LENGTH.value,
-                                                (128, 256, 512),
-                                                'unsupported key length',
-                                                False)
-            self._validate_req_field(attributes,
-                                     AT.CRYPTOGRAPHIC_USAGE_MASK.value,
-                                     (),
-                                     '')
+            alg_attr = self._validate_req_field(
+                attributes, AT.CRYPTOGRAPHIC_ALGORITHM.value,
+                (CA.AES,), 'unsupported algorithm')
+            len_attr = self._validate_req_field(
+                attributes, AT.CRYPTOGRAPHIC_LENGTH.value,
+                (128, 256, 512), 'unsupported key length', False)
+            self._validate_req_field(
+                attributes, AT.CRYPTOGRAPHIC_USAGE_MASK.value, (), '')
         except InvalidFieldException as e:
             self.logger.debug('InvalidFieldException raised')
             return e.result
@@ -129,10 +143,14 @@ class KMIPImpl(KMIP):
         s_uuid, uuid_attribute = self._save(key, attributes)
         ret_attributes.append(uuid_attribute)
         template_attribute = TemplateAttribute(attributes=ret_attributes)
-        return CreateResult(ResultStatus(RS.SUCCESS),
-                            object_type=object_type,
+        return CreateResult(ResultStatus(RS.SUCCESS), object_type=object_type,
                             uuid=UniqueIdentifier(s_uuid),
                             template_attribute=template_attribute)
+
+    def create_key_pair(self, common_template_attribute,
+                        private_key_template_attribute,
+                        public_key_template_attribute):
+        raise NotImplementedError()
 
     def register(self, object_type, template_attribute, secret,
                  credential=None):
@@ -143,7 +161,7 @@ class KMIPImpl(KMIP):
         if object_type is None:
             self.logger.debug('invalid object type')
             return self._get_missing_field_result('object type')
-        if object_type.enum != OT.SYMMETRIC_KEY:
+        if object_type.value != OT.SYMMETRIC_KEY:
             self.logger.debug('invalid object type')
             return self._get_invalid_field_result('invalid object type')
         if secret is None or not isinstance(secret, SymmetricKey):
@@ -158,18 +176,14 @@ class KMIPImpl(KMIP):
 
         self.logger.debug('Verifying all attributes are valid and set')
         try:
-            self._validate_req_field(attributes,
-                                     AT.CRYPTOGRAPHIC_ALGORITHM.value,
-                                     (CA.AES.value,),
-                                     'unsupported algorithm')
-            self._validate_req_field(attributes,
-                                     AT.CRYPTOGRAPHIC_LENGTH.value,
-                                     (128, 256, 512),
-                                     'unsupported key length')
-            self._validate_req_field(attributes,
-                                     AT.CRYPTOGRAPHIC_USAGE_MASK.value,
-                                     (),
-                                     '')
+            self._validate_req_field(
+                attributes, AT.CRYPTOGRAPHIC_ALGORITHM.value, (CA.AES,),
+                'unsupported algorithm')
+            self._validate_req_field(
+                attributes, AT.CRYPTOGRAPHIC_LENGTH.value, (128, 256, 512),
+                'unsupported key length')
+            self._validate_req_field(
+                attributes, AT.CRYPTOGRAPHIC_USAGE_MASK.value, (), '')
         except InvalidFieldException as e:
             self.logger.debug('InvalidFieldException raised')
             return RegisterResult(e.result.result_status,
@@ -182,6 +196,12 @@ class KMIPImpl(KMIP):
         return RegisterResult(ResultStatus(RS.SUCCESS),
                               uuid=UniqueIdentifier(s_uuid),
                               template_attribute=template_attribute)
+
+    def rekey_key_pair(self, private_key_unique_identifier,
+                       offset, common_template_attribute,
+                       private_key_template_attribute,
+                       public_key_template_attribute):
+        raise NotImplementedError()
 
     def get(self,
             uuid=None,
@@ -199,7 +219,7 @@ class KMIPImpl(KMIP):
         if key_format_type is None:
             self.logger.debug('key format type is None, setting to raw')
             key_format_type = KeyFormatType(KeyFormatTypeEnum.RAW)
-        if key_format_type.enum != KeyFormatTypeEnum.RAW:
+        if key_format_type.value != KeyFormatTypeEnum.RAW:
             self.logger.debug('key format type is not raw')
             reason = ResultReason(ResultReasonEnum.
                                   KEY_FORMAT_TYPE_NOT_SUPPORTED)
@@ -229,10 +249,8 @@ class KMIPImpl(KMIP):
         # currently only symmetric keys are supported, fix this in future
         object_type = ObjectType(OT.SYMMETRIC_KEY)
         ret_value = RS.SUCCESS
-        return GetResult(ResultStatus(ret_value),
-                         object_type=object_type,
-                         uuid=uuid,
-                         secret=managed_object)
+        return GetResult(ResultStatus(ret_value), object_type=object_type,
+                         uuid=uuid, secret=managed_object)
 
     def destroy(self, uuid):
         self.logger.debug('destroy() called')
@@ -268,8 +286,33 @@ class KMIPImpl(KMIP):
             msg = ResultMessage('Locate Operation Not Supported')
             reason = ResultReason(ResultReasonEnum.OPERATION_NOT_SUPPORTED)
             return LocateResult(ResultStatus(RS.OPERATION_FAILED),
-                                result_reason=reason,
-                                result_message=msg)
+                                result_reason=reason, result_message=msg)
+
+    def discover_versions(self, protocol_versions=None):
+        self.logger.debug(
+            "discover_versions(protocol_versions={0}) called".format(
+                protocol_versions))
+        msg = 'get protocol versions supported by server'
+
+        result_versions = list()
+        if protocol_versions:
+            msg += " and client; client versions {0}".format(protocol_versions)
+            for version in protocol_versions:
+                if version in self.protocol_versions:
+                    result_versions.append(version)
+        else:
+            result_versions = self.protocol_versions
+
+        self.logger.debug(msg)
+        try:
+            return DiscoverVersionsResult(ResultStatus(RS.SUCCESS),
+                                          protocol_versions=result_versions)
+        except Exception:
+            msg = ResultMessage('DiscoverVersions Operation Failed')
+            reason = ResultReason(ResultReasonEnum.GENERAL_FAILURE)
+            return DiscoverVersionsResult(ResultStatus(RS.OPERATION_FAILED),
+                                          result_reason=reason,
+                                          result_message=msg)
 
     def _validate_req_field(self, attrs, name, expected, msg, required=True):
         self.logger.debug('Validating attribute %s' % name)
@@ -326,9 +369,9 @@ class KMIPImpl(KMIP):
         return OperationResult(status, reason, message)
 
     def _gen_symmetric_key(self, bit_length, crypto_alg):
-        key_format_type = KeyBlock.KeyFormatType(KeyFormatTypeEnum.RAW)
-        key_material = RawKey(bytearray(os.urandom(int(bit_length/8))))
-        key_value = KeyValueStruct(key_format_type, key_material)
+        key_format_type = KeyFormatType(KeyFormatTypeEnum.RAW)
+        key_material = KeyMaterial(os.urandom(int(bit_length/8)))
+        key_value = KeyValue(key_material)
         crypto_length = CryptographicLength(bit_length)
         key_block = KeyBlock(key_format_type, None, key_value, crypto_alg,
                              crypto_length, None)
@@ -352,7 +395,7 @@ class KMIPImpl(KMIP):
             self.logger.debug('crypto_alg set on key block')
             self.logger.debug('adding crypto algorithm attribute')
             at = AT.CRYPTOGRAPHIC_ALGORITHM
-            alg = key_block.cryptographic_algorithm.enum
+            alg = key_block.cryptographic_algorithm.value
             attributes.append(self.attribute_factory.create_attribute(at, alg))
         if key_block.cryptographic_length is not None:
             self.logger.debug('crypto_length set on key block')
@@ -366,7 +409,6 @@ class KMIPImpl(KMIP):
             kv = key_block.key_value
             if isinstance(kv, KeyValue):
                 kv = key_block.key_value
-            if isinstance(kv, KeyValueStruct):
                 if kv.attributes is not None:
                     self.logger.debug('adding the key value struct attributes')
                     attributes.extend(kv.attributes)
@@ -376,5 +418,5 @@ class KMIPImpl(KMIP):
 class InvalidFieldException(Exception):
 
     def __init__(self, result):
-        super(self.__class__, self).__init__()
+        super(InvalidFieldException, self).__init__()
         self.result = result

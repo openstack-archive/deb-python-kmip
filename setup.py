@@ -13,11 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import re
 import setuptools
+
+# Dynamically set __version__
+version_path = os.path.join(os.path.dirname(
+    os.path.realpath(__file__)), 'kmip', 'version.py')
+with open(version_path, 'r') as version_file:
+    mo = re.search(r"^.*= '(\d\.\d\.\d)'$", version_file.read(), re.MULTILINE)
+    __version__ = mo.group(1)
 
 setuptools.setup(
     name='PyKMIP',
-    version='0.2.0',
+    version=__version__,
     description='KMIP v1.1 library',
     keywords='KMIP',
     author='Peter Hamilton',
@@ -25,20 +34,19 @@ setuptools.setup(
     url='https://github.com/OpenKMIP/PyKMIP',
     license='Apache License, Version 2.0',
     packages=setuptools.find_packages(exclude=["kmip.tests", "kmip.tests.*"]),
-    package_data={'kmip': ['logconfig.ini']},
+    package_data={'kmip': ['kmipconfig.ini', 'logconfig.ini'],
+                  'kmip.demos': ['certs/server.crt', 'certs/server.key']},
     install_requires=[
         "enum34",
-        "sqlalchemy",
+        "six",
     ],
     classifiers=[
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",
         "Natural Language :: English",
-        "Operating System :: MacOS :: MacOS X",
         "Operating System :: POSIX",
         "Operating System :: POSIX :: BSD",
         "Operating System :: POSIX :: Linux",
-        "Operating System :: Microsoft :: Windows",
         "Programming Language :: Python",
         "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 2.6",

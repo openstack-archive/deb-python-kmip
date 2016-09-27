@@ -18,6 +18,8 @@ from kmip.core.attributes import CertificateType
 from kmip.core import enums
 from kmip.core.enums import Tags
 
+from kmip.core.misc import CertificateValue
+
 from kmip.core.objects import Attribute
 from kmip.core.objects import KeyBlock
 
@@ -33,52 +35,102 @@ from kmip.core.utils import BytearrayStream
 # 2.2
 # 2.2.1
 class Certificate(Struct):
+    """
+    A structure representing a DER-encoded X.509 public key certificate.
 
-    class CertificateValue(ByteString):
+    See Section 2.2.1 of the KMIP 1.1 specification for more information.
 
-        def __init__(self, value=None):
-            super(self.__class__, self).__init__(value,
-                                                 Tags.CERTIFICATE_VALUE)
+    Attributes:
+        certificate_type: The type of the certificate.
+        certificate_value: The bytes of the certificate.
+    """
 
     def __init__(self,
                  certificate_type=None,
                  certificate_value=None):
-        super(self.__class__, self).__init__(Tags.CERTIFICATE)
-        self.certificate_type = certificate_type
-        self.certificate_value = certificate_value
-        self.validate()
+        """
+        Construct a Certificate object.
+
+        Args:
+            certificate_type (CertificateTypeEnum): The type of the
+                certificate. Optional, defaults to None.
+            certificate_value (bytes): The bytes of the certificate. Optional,
+                defaults to None.
+        """
+        super(Certificate, self).__init__(Tags.CERTIFICATE)
+
+        if certificate_type is None:
+            self.certificate_type = CertificateType()
+        else:
+            self.certificate_type = CertificateType(certificate_type)
+
+        if certificate_value is None:
+            self.certificate_value = CertificateValue()
+        else:
+            self.certificate_value = CertificateValue(certificate_value)
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        """
+        Read the data encoding the Certificate object and decode it into its
+        constituent parts.
+
+        Args:
+            istream (Stream): A data stream containing encoded object data,
+                supporting a read method; usually a BytearrayStream object.
+        """
+        super(Certificate, self).read(istream)
         tstream = BytearrayStream(istream.read(self.length))
 
         self.certificate_type = CertificateType()
-        self.certificate_value = Certificate.CertificateValue()
+        self.certificate_value = CertificateValue()
 
         self.certificate_type.read(tstream)
         self.certificate_value.read(tstream)
 
         self.is_oversized(tstream)
-        self.validate()
 
     def write(self, ostream):
+        """
+        Write the data encoding the Certificate object to a stream.
+
+        Args:
+            ostream (Stream): A data stream in which to encode object data,
+                supporting a write method; usually a BytearrayStream object.
+        """
         tstream = BytearrayStream()
 
-        # Write the details of the certificate
         self.certificate_type.write(tstream)
         self.certificate_value.write(tstream)
 
-        # Write the length and value of the template attribute
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(Certificate, self).write(ostream)
         ostream.write(tstream.buffer)
 
-    def validate(self):
-        self.__validate()
+    def __eq__(self, other):
+        if isinstance(other, Certificate):
+            if self.certificate_type != other.certificate_type:
+                return False
+            elif self.certificate_value != other.certificate_value:
+                return False
+            else:
+                return True
+        else:
+            return NotImplemented
 
-    def __validate(self):
-        # TODO (peter-hamilton) Finish implementation.
-        pass
+    def __ne__(self, other):
+        if isinstance(other, Certificate):
+            return not (self == other)
+        else:
+            return NotImplemented
+
+    def __repr__(self):
+        return "{0}(certificate_type={1}, certificate_value=b'{2}')".format(
+            type(self).__name__,
+            str(self.certificate_type),
+            str(self.certificate_value))
+
+    def __str__(self):
+        return "{0}".format(str(self.certificate_value))
 
 
 # 2.2.2
@@ -120,7 +172,7 @@ class KeyBlockKey(Struct):
 class SymmetricKey(KeyBlockKey):
 
     def __init__(self, key_block=None):
-        super(self.__class__, self).__init__(key_block, Tags.SYMMETRIC_KEY)
+        super(SymmetricKey, self).__init__(key_block, Tags.SYMMETRIC_KEY)
         self.validate()
 
     def validate(self):
@@ -135,7 +187,7 @@ class SymmetricKey(KeyBlockKey):
 class PublicKey(KeyBlockKey):
 
     def __init__(self, key_block=None):
-        super(self.__class__, self).__init__(key_block, Tags.PUBLIC_KEY)
+        super(PublicKey, self).__init__(key_block, Tags.PUBLIC_KEY)
         self.validate()
 
     def validate(self):
@@ -150,7 +202,7 @@ class PublicKey(KeyBlockKey):
 class PrivateKey(KeyBlockKey):
 
     def __init__(self, key_block=None):
-        super(self.__class__, self).__init__(key_block, Tags.PRIVATE_KEY)
+        super(PrivateKey, self).__init__(key_block, Tags.PRIVATE_KEY)
         self.validate()
 
     def validate(self):
@@ -167,33 +219,32 @@ class SplitKey(Struct):
     class SplitKeyParts(Integer):
 
         def __init__(self, value=None):
-                super(self.__class__, self).__init__(value,
-                                                     Tags.SPLIT_KEY_PARTS)
+            super(SplitKey.SplitKeyParts, self).__init__(
+                value, Tags.SPLIT_KEY_PARTS)
 
     class KeyPartIdentifier(Integer):
 
         def __init__(self, value=None):
-                super(self.__class__, self).__init__(value,
-                                                     Tags.KEY_PART_IDENTIFIER)
+            super(SplitKey.KeyPartIdentifier, self).__init__(
+                value, Tags.KEY_PART_IDENTIFIER)
 
     class SplitKeyThreshold(Integer):
 
         def __init__(self, value=None):
-                super(self.__class__, self).__init__(value,
-                                                     Tags.SPLIT_KEY_THRESHOLD)
+            super(SplitKey.SplitKeyThreshold, self).__init__(
+                value, Tags.SPLIT_KEY_THRESHOLD)
 
     class SplitKeyMethod(Enumeration):
-        ENUM_TYPE = enums.SplitKeyMethod
 
         def __init__(self, value=None):
-                super(self.__class__, self).__init__(value,
-                                                     Tags.SPLIT_KEY_METHOD)
+            super(SplitKey.SplitKeyMethod, self).__init__(
+                enums.SplitKeyMethod, value, Tags.SPLIT_KEY_METHOD)
 
     class PrimeFieldSize(BigInteger):
 
         def __init__(self, value=None):
-                super(self.__class__, self).__init__(value,
-                                                     Tags.PRIME_FIELD_SIZE)
+            super(SplitKey.PrimeFieldSize, self).__init__(
+                value, Tags.PRIME_FIELD_SIZE)
 
     def __init__(self,
                  split_key_parts=None,
@@ -202,7 +253,7 @@ class SplitKey(Struct):
                  split_key_method=None,
                  prime_field_size=None,
                  key_block=None):
-        super(self.__class__, self).__init__(Tags.SPLIT_KEY)
+        super(SplitKey, self).__init__(Tags.SPLIT_KEY)
         self.split_key_parts = split_key_parts
         self.key_part_identifier = key_part_identifier
         self.split_key_threshold = split_key_threshold
@@ -212,7 +263,7 @@ class SplitKey(Struct):
         self.validate()
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        super(SplitKey, self).read(istream)
         tstream = BytearrayStream(istream.read(self.length))
 
         self.split_key_parts = SplitKey.SplitKeyParts()
@@ -249,7 +300,7 @@ class SplitKey(Struct):
 
         # Write the length and value of the template attribute
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(SplitKey, self).write(ostream)
         ostream.write(tstream.buffer)
 
     def validate(self):
@@ -264,12 +315,12 @@ class SplitKey(Struct):
 class Template(Struct):
 
     def __init__(self, attributes=None):
-        super(self.__class__, self).__init__(Tags.TEMPLATE)
+        super(Template, self).__init__(Tags.TEMPLATE)
         self.attributes = attributes
         self.validate()
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        super(Template, self).read(istream)
         tstream = BytearrayStream(istream.read(self.length))
 
         self.attributes = list()
@@ -294,7 +345,7 @@ class Template(Struct):
 
         # Write the length and value of the template attribute
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(Template, self).write(ostream)
         ostream.write(tstream.buffer)
 
     def validate(self):
@@ -309,21 +360,21 @@ class Template(Struct):
 class SecretData(Struct):
 
     class SecretDataType(Enumeration):
-        ENUM_TYPE = enums.SecretDataType
 
         def __init__(self, value=None):
-            super(self.__class__, self).__init__(value, Tags.SECRET_DATA_TYPE)
+            super(SecretData.SecretDataType, self).__init__(
+                enums.SecretDataType, value, Tags.SECRET_DATA_TYPE)
 
     def __init__(self,
                  secret_data_type=None,
                  key_block=None):
-        super(self.__class__, self).__init__(Tags.SECRET_DATA)
+        super(SecretData, self).__init__(Tags.SECRET_DATA)
         self.secret_data_type = secret_data_type
         self.key_block = key_block
         self.validate()
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        super(SecretData, self).read(istream)
         tstream = BytearrayStream(istream.read(self.length))
 
         self.secret_data_type = SecretData.SecretDataType()
@@ -343,7 +394,7 @@ class SecretData(Struct):
 
         # Write the length and value of the template attribute
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(SecretData, self).write(ostream)
         ostream.write(tstream.buffer)
 
     def validate(self):
@@ -358,26 +409,27 @@ class SecretData(Struct):
 class OpaqueObject(Struct):
 
     class OpaqueDataType(Enumeration):
-        ENUM_TYPE = enums.OpaqueDataType
 
         def __init__(self, value=None):
-            super(self.__class__, self).__init__(value, Tags.OPAQUE_DATA_TYPE)
+            super(OpaqueObject.OpaqueDataType, self).__init__(
+                enums.OpaqueDataType, value, Tags.OPAQUE_DATA_TYPE)
 
     class OpaqueDataValue(ByteString):
 
         def __init__(self, value=None):
-            super(self.__class__, self).__init__(value, Tags.OPAQUE_DATA_VALUE)
+            super(OpaqueObject.OpaqueDataValue, self).__init__(
+                value, Tags.OPAQUE_DATA_VALUE)
 
     def __init__(self,
                  opaque_data_type=None,
                  opaque_data_value=None):
-        super(self.__class__, self).__init__(Tags.OPAQUE_OBJECT)
+        super(OpaqueObject, self).__init__(Tags.OPAQUE_OBJECT)
         self.opaque_data_type = opaque_data_type
         self.opaque_data_value = opaque_data_value
         self.validate()
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        super(OpaqueObject, self).read(istream)
         tstream = BytearrayStream(istream.read(self.length))
 
         self.opaque_data_type = OpaqueObject.OpaqueDataType()
@@ -397,7 +449,7 @@ class OpaqueObject(Struct):
 
         # Write the length and value of the template attribute
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(OpaqueObject, self).write(ostream)
         ostream.write(tstream.buffer)
 
     def validate(self):

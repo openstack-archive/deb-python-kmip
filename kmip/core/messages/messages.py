@@ -19,7 +19,8 @@ from kmip.core.messages import contents
 from kmip.core.messages.contents import AsynchronousCorrelationValue
 from kmip.core.messages.contents import BatchErrorContinuationOption
 
-from kmip.core.messages import operations
+from kmip.core.factories.payloads.request import RequestPayloadFactory
+from kmip.core.factories.payloads.response import ResponsePayloadFactory
 
 from kmip.core.primitives import Struct
 
@@ -37,7 +38,7 @@ class RequestHeader(Struct):
                  batch_order_option=None,
                  time_stamp=None,
                  batch_count=None):
-        super(self.__class__, self).__init__(tag=Tags.REQUEST_HEADER)
+        super(RequestHeader, self).__init__(tag=Tags.REQUEST_HEADER)
         self.protocol_version = protocol_version
         self.maximum_response_size = maximum_response_size
         self.asynchronous_indicator = asynchronous_indicator
@@ -48,7 +49,7 @@ class RequestHeader(Struct):
         self.batch_count = batch_count
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        super(RequestHeader, self).read(istream)
         tstream = BytearrayStream(istream.read(self.length))
 
         self.protocol_version = contents.ProtocolVersion()
@@ -110,7 +111,7 @@ class RequestHeader(Struct):
 
         # Write the length and value of the request header
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(RequestHeader, self).write(ostream)
         ostream.write(tstream.buffer)
 
 
@@ -120,14 +121,14 @@ class ResponseHeader(Struct):
                  protocol_version=None,
                  time_stamp=None,
                  batch_count=None):
-        super(self.__class__, self).__init__(tag=Tags.RESPONSE_HEADER)
+        super(ResponseHeader, self).__init__(tag=Tags.RESPONSE_HEADER)
         self.protocol_version = protocol_version
         self.time_stamp = time_stamp
         self.batch_count = batch_count
         self.validate()
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        super(ResponseHeader, self).read(istream)
         tstream = BytearrayStream(istream.read(self.length))
 
         self.protocol_version = contents.ProtocolVersion()
@@ -152,7 +153,7 @@ class ResponseHeader(Struct):
 
         # Write the length and value of the request header
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(ResponseHeader, self).write(ostream)
         ostream.write(tstream.buffer)
 
     def validate(self):
@@ -174,14 +175,17 @@ class RequestBatchItem(Struct):
                  unique_batch_item_id=None,
                  request_payload=None,
                  message_extension=None):
-        super(self.__class__, self).__init__(tag=Tags.REQUEST_BATCH_ITEM)
+        super(RequestBatchItem, self).__init__(tag=Tags.REQUEST_BATCH_ITEM)
+
+        self.payload_factory = RequestPayloadFactory()
+
         self.operation = operation
         self.unique_batch_item_id = unique_batch_item_id
         self.request_payload = request_payload
         self.message_extension = message_extension
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        super(RequestBatchItem, self).read(istream)
         tstream = BytearrayStream(istream.read(self.length))
 
         # Read the batch item operation
@@ -193,9 +197,10 @@ class RequestBatchItem(Struct):
             self.unique_batch_item_id = contents.UniqueBatchItemID()
             self.unique_batch_item_id.read(tstream)
 
-        # Lookup the response payload class that belongs to the operation
-        cls = operations.REQUEST_MAP.get(self.operation.enum)
-        self.request_payload = cls()
+        # Dynamically create the response payload class that belongs to the
+        # operation
+        self.request_payload = self.payload_factory.create(
+            self.operation.value)
         self.request_payload.read(tstream)
 
         # Read the message extension if it is present
@@ -221,7 +226,7 @@ class RequestBatchItem(Struct):
 
         # Write the length and value of the batch item
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(RequestBatchItem, self).write(ostream)
         ostream.write(tstream.buffer)
 
 
@@ -236,7 +241,10 @@ class ResponseBatchItem(Struct):
                  async_correlation_value=None,
                  response_payload=None,
                  message_extension=None):
-        super(self.__class__, self).__init__(tag=Tags.RESPONSE_BATCH_ITEM)
+        super(ResponseBatchItem, self).__init__(tag=Tags.RESPONSE_BATCH_ITEM)
+
+        self.payload_factory = ResponsePayloadFactory()
+
         self.operation = operation
         self.unique_batch_item_id = unique_batch_item_id
         self.result_status = result_status
@@ -248,7 +256,7 @@ class ResponseBatchItem(Struct):
         self.validate()
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        super(ResponseBatchItem, self).read(istream)
         tstream = BytearrayStream(istream.read(self.length))
 
         # Read the batch item operation if it is present
@@ -280,12 +288,13 @@ class ResponseBatchItem(Struct):
             self.async_correlation_value = AsynchronousCorrelationValue()
             self.async_correlation_value.read(tstream)
 
-        # Lookup the response payload class that belongs to the operation
-        cls = operations.RESPONSE_MAP.get(self.operation.enum)
-        expected = cls()
-        if self.is_tag_next(expected.tag, tstream):
-            self.response_payload = cls()
-            self.response_payload.read(tstream)
+        if (self.operation is not None):
+            # Dynamically create the response payload class that belongs to the
+            # operation
+            expected = self.payload_factory.create(self.operation.value)
+            if self.is_tag_next(expected.tag, tstream):
+                self.response_payload = expected
+                self.response_payload.read(tstream)
 
         # Read the message extension if it is present
         if self.is_tag_next(Tags.MESSAGE_EXTENSION, tstream):
@@ -319,7 +328,7 @@ class ResponseBatchItem(Struct):
 
         # Write the length and value of the batch item
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(ResponseBatchItem, self).write(ostream)
         ostream.write(tstream.buffer)
 
     def validate(self):
@@ -329,12 +338,12 @@ class ResponseBatchItem(Struct):
 class RequestMessage(Struct):
 
     def __init__(self, request_header=None, batch_items=None,):
-        super(self.__class__, self).__init__(tag=Tags.REQUEST_MESSAGE)
+        super(RequestMessage, self).__init__(tag=Tags.REQUEST_MESSAGE)
         self.request_header = request_header
         self.batch_items = batch_items
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        super(RequestMessage, self).read(istream)
 
         self.request_header = RequestHeader()
         self.request_header.read(istream)
@@ -355,20 +364,20 @@ class RequestMessage(Struct):
 
         # Write the TTLV encoding of the request message
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(RequestMessage, self).write(ostream)
         ostream.write(tstream.buffer)
 
 
 class ResponseMessage(Struct):
 
     def __init__(self, response_header=None, batch_items=None,):
-        super(self.__class__, self).__init__(tag=Tags.RESPONSE_MESSAGE)
+        super(ResponseMessage, self).__init__(tag=Tags.RESPONSE_MESSAGE)
         self.response_header = response_header
         self.batch_items = batch_items
         self.validate()
 
     def read(self, istream):
-        super(self.__class__, self).read(istream)
+        super(ResponseMessage, self).read(istream)
 
         self.response_header = ResponseHeader()
         self.response_header.read(istream)
@@ -390,7 +399,7 @@ class ResponseMessage(Struct):
 
         # Write the TTLV encoding of the request message
         self.length = tstream.length()
-        super(self.__class__, self).write(ostream)
+        super(ResponseMessage, self).write(ostream)
         ostream.write(tstream.buffer)
 
     def validate(self):

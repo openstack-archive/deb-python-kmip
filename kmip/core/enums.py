@@ -16,10 +16,10 @@
 # In case of new content, remove the following line to enable flake8 tests
 # flake8: noqa
 
-from enum import Enum
+import enum
 
 
-class AttributeType(Enum):
+class AttributeType(enum.Enum):
     UNIQUE_IDENTIFIER                = 'Unique Identifier'
     NAME                             = 'Name'
     OBJECT_TYPE                      = 'Object Type'
@@ -61,8 +61,44 @@ class AttributeType(Enum):
     CUSTOM_ATTRIBUTE                 = 'Custom Attribute'
 
 
+class ConformanceClause(enum.Enum):
+    """
+    The specification of KMIP features supported by KMIP clients and servers.
+
+    The conformance clause defines the KMIP objects and operations that need
+    to be supported for a specific feature set. The clause is one of two core
+    components that make up a KMIP client/server profile. For more information,
+    see Section 5 of the KMIP 1.1 profiles document.
+    """
+    DISCOVER_VERSIONS                      = 1
+    BASELINE                               = 2
+    SECRET_DATA                            = 3
+    SYMMETRIC_KEY_STORE                    = 4
+    SYMMETRIC_KEY_FOUNDRY                  = 5
+    ASYMMETRIC_KEY_STORE                   = 6
+    ASYMMETRIC_KEY_AND_CERTIFICATE_STORE   = 7
+    ASYMMETRIC_KEY_FOUNDRY                 = 8
+    CERTIFICATE                            = 9
+    ASYMMETRIC_KEY_FOUNDRY_AND_CERTIFICATE = 10
+    STORAGE                                = 11
+
+
+class AuthenticationSuite(enum.Enum):
+    """
+    The type of authentication suite used by KMIP clients and servers.
+
+    The authentication suite defines the protocol versions and cipher suites
+    that should be used to secure KMIP client/server communications. An
+    authentication suite is one of two core components that make up a KMIP
+    client/server profile. For more information, see Section 3 of the KMIP
+    1.1 profiles document.
+    """
+    BASIC = 1
+    TLS12 = 2
+
+
 # 9.1.1.2
-class Types(Enum):
+class Types(enum.Enum):
     DEFAULT      = 0x00
     STRUCTURE    = 0x01
     INTEGER      = 0x02
@@ -77,7 +113,7 @@ class Types(Enum):
 
 
 # 9.1.3.1
-class Tags(Enum):
+class Tags(enum.Enum):
     DEFAULT                                = 0x420000
     ACTIVATION_DATE                        = 0x420001
     APPLICATION_DATA                       = 0x420002
@@ -267,13 +303,13 @@ class Tags(Enum):
 
 
 # 9.1.3.2.1
-class CredentialType(Enum):
+class CredentialType(enum.Enum):
     USERNAME_AND_PASSWORD = 0x00000001
     DEVICE                = 0x00000002
 
 
 # 9.1.3.2.2
-class KeyCompressionType(Enum):
+class KeyCompressionType(enum.Enum):
     EC_PUBLIC_KEY_TYPE_UNCOMPRESSED           = 0x00000001
     EC_PUBLIC_KEY_TYPE_X9_62_COMPRESSED_PRIME = 0x00000002
     EC_PUBLIC_KEY_TYPE_X9_62_COMPRESSED_CHAR2 = 0x00000003
@@ -281,7 +317,7 @@ class KeyCompressionType(Enum):
 
 
 # 9.1.3.2.3
-class KeyFormatType(Enum):
+class KeyFormatType(enum.Enum):
     RAW                           = 0x00000001
     OPAQUE                        = 0x00000002
     PKCS_1                        = 0x00000003
@@ -304,7 +340,7 @@ class KeyFormatType(Enum):
 
 
 # 9.1.3.2.4
-class WrappingMethod(Enum):
+class WrappingMethod(enum.Enum):
     ENCRYPT               = 0x00000001
     MAC_SIGN              = 0x00000002
     ENCRYPT_THEN_MAC_SIGN = 0x00000003
@@ -313,37 +349,43 @@ class WrappingMethod(Enum):
 
 
 # 9.1.3.2.6
-class CertificateType(Enum):
+class CertificateTypeEnum(enum.Enum):
+    """
+    The type of a Certificate Managed Object.
+
+    For more information, see Section 2.2.1 of the KMIP 1.1 specification.
+    """
     X_509 = 0x00000001
     PGP   = 0x00000002
 
 
 # 9.1.3.2.8
-class SplitKeyMethod(Enum):
+class SplitKeyMethod(enum.Enum):
     XOR                            = 0x00000001
     POLYNOMIAL_SHARING_GF          = 0x00000002
     POLYNOMIAL_SHARING_PRIME_FIELD = 0x00000003
 
 
 # 9.1.3.2.9
-class SecretDataType(Enum):
+class SecretDataType(enum.Enum):
     PASSWORD = 0x00000001
     SEED     = 0x00000002
 
-
 # 9.1.3.2.10
-class OpaqueDataType(Enum):
-    pass
+class OpaqueDataType(enum.Enum):
+    NONE = 0x80000000 # Not defined by the standard, but we need something.
+                      # The standard does say that values starting 0x8xxxxxx
+                      # are considered extensions
 
 
 # 9.1.3.2.11
-class NameType(Enum):
+class NameType(enum.Enum):
     UNINTERPRETED_TEXT_STRING = 0x00000001
     URI                       = 0x00000002
 
 
 # 9.1.3.2.12
-class ObjectType(Enum):
+class ObjectType(enum.Enum):
     CERTIFICATE   = 0x00000001
     SYMMETRIC_KEY = 0x00000002
     PUBLIC_KEY    = 0x00000003
@@ -355,7 +397,7 @@ class ObjectType(Enum):
 
 
 # 9.1.3.2.13
-class CryptographicAlgorithm(Enum):
+class CryptographicAlgorithm(enum.Enum):
     DES         = 0x00000001
     TRIPLE_DES  = 0x00000002  # '3DES' is invalid syntax
     AES         = 0x00000003
@@ -384,7 +426,7 @@ class CryptographicAlgorithm(Enum):
 
 
 # 9.1.3.2.14
-class BlockCipherMode(Enum):
+class BlockCipherMode(enum.Enum):
     CBC                  = 0x00000001
     ECB                  = 0x00000002
     PCBC                 = 0x00000003
@@ -405,7 +447,7 @@ class BlockCipherMode(Enum):
 
 
 # 9.1.3.2.15
-class PaddingMethod(Enum):
+class PaddingMethod(enum.Enum):
     NONE        = 0x00000001
     OAEP        = 0x00000002
     PKCS5       = 0x00000003
@@ -419,7 +461,7 @@ class PaddingMethod(Enum):
 
 
 # 9.1.3.2.16
-class HashingAlgorithm(Enum):
+class HashingAlgorithm(enum.Enum):
     MD2        = 0x00000001
     MD4        = 0x00000002
     MD5        = 0x00000003
@@ -434,7 +476,7 @@ class HashingAlgorithm(Enum):
 
 
 # 9.1.3.2.17
-class KeyRoleType(Enum):
+class KeyRoleType(enum.Enum):
     BDK       = 0x00000001
     CVK       = 0x00000002
     DEK       = 0x00000003
@@ -458,8 +500,17 @@ class KeyRoleType(Enum):
     PVKOTH    = 0x00000015
 
 
+# 9.1.3.2.24
+class QueryFunction(enum.Enum):
+    QUERY_OPERATIONS             = 0x00000001
+    QUERY_OBJECTS                = 0x00000002
+    QUERY_SERVER_INFORMATION     = 0x00000003
+    QUERY_APPLICATION_NAMESPACES = 0x00000004
+    QUERY_EXTENSION_LIST         = 0x00000005
+    QUERY_EXTENSION_MAP          = 0x00000006
+
 # 9.1.3.2.27
-class Operation(Enum):
+class Operation(enum.Enum):
     CREATE               = 0x00000001
     CREATE_KEY_PAIR      = 0x00000002
     REGISTER             = 0x00000003
@@ -493,7 +544,7 @@ class Operation(Enum):
 
 
 # 9.1.3.2.28
-class ResultStatus(Enum):
+class ResultStatus(enum.Enum):
     SUCCESS           = 0x00000000
     OPERATION_FAILED  = 0x00000001
     OPERATION_PENDING = 0x00000002
@@ -501,7 +552,7 @@ class ResultStatus(Enum):
 
 
 # 9.1.3.2.29
-class ResultReason(Enum):
+class ResultReason(enum.Enum):
     ITEM_NOT_FOUND                      = 0x00000001
     RESPONSE_TOO_LARGE                  = 0x00000002
     AUTHENTICATION_NOT_SUCCESSFUL       = 0x00000003
@@ -524,21 +575,21 @@ class ResultReason(Enum):
 
 
 # 9.1.3.2.30
-class BatchErrorContinuationOption(Enum):
+class BatchErrorContinuationOption(enum.Enum):
     CONTINUE = 0x00000001
     STOP     = 0x00000002
     UNDO     = 0x00000003
 
 
 # 9.1.3.2.32
-class EncodingOption(Enum):
+class EncodingOption(enum.Enum):
     NO_ENCODING   = 0x00000001
     TTLV_ENCODING = 0x00000002
 
 
 # 9.1.3.3
 # 9.1.3.3.1
-class CryptographicUsageMask(Enum):
+class CryptographicUsageMask(enum.Enum):
     SIGN                = 0x00000001
     VERIFY              = 0x00000002
     ENCRYPT             = 0x00000004
@@ -561,11 +612,20 @@ class CryptographicUsageMask(Enum):
     TRANSLATE_UNWRAP    = 0x00080000
 
 # 9.1.3.2.33
-class ObjectGroupMember(Enum):
+class ObjectGroupMember(enum.Enum):
     GROUP_MEMBER_FRESH    = 0x00000001
     GROUP_MEMBER_DEFAULT  = 0x00000002
 
 # 9.1.3.3.2
-class StorageStatusMask(Enum):
+class StorageStatusMask(enum.Enum):
     ONLINE_STORAGE      = 0x00000001
     ARCHIVAL_STORAGE    = 0x00000002
+
+class RevocationReasonCode(enum.Enum):
+    UNSPECIFIED            = 0x00000001
+    KEY_COMPROMISE         = 0x00000002
+    CA_COMPROMISE          = 0x00000003
+    AFFILIATION_CHANGED    = 0x00000004
+    SUPERSEDED             = 0x00000005
+    CESSATION_OF_OPERATION = 0x00000006
+    PRIVILEGE_WITHDRAWN    = 0x00000007
