@@ -9,7 +9,9 @@ Build-Depends: debhelper (>= 9),
                python-setuptools,
                python3-all,
                python3-setuptools
-Build-Depends-Indep: python-coverage,
+Build-Depends-Indep: ca-certificates,
+                     python-coverage,
+                     python-cryptography,
                      python-enum34,
                      python-fixtures,
                      python-mock,
@@ -18,6 +20,7 @@ Build-Depends-Indep: python-coverage,
                      python-testresources,
                      python-testscenarios,
                      python-testtools,
+                     python3-cryptography,
                      python3-enum34,
                      python3-fixtures,
                      python3-mock,
@@ -27,9 +30,9 @@ Build-Depends-Indep: python-coverage,
                      python3-testscenarios,
                      python3-testtools,
                      testrepository
-Standards-Version: 3.9.6
-Vcs-Browser: https://anonscm.debian.org/cgit/openstack/python-kmip.git/
-Vcs-Git: https://anonscm.debian.org/git/openstack/python-kmip.git
+Standards-Version: 3.9.8
+Vcs-Browser: https://git.openstack.org/cgit/openstack/deb-python-kmip?h=debian%2Fnewton
+Vcs-Git: https://git.openstack.org/openstack/deb-python-kmip -b debian/newton
 Homepage: https://github.com/OpenKMIP/PyKMIP
 
 Package: python-kmip

@@ -19,15 +19,21 @@ from kmip.core.attributes import CryptographicAlgorithm
 from kmip.core.attributes import CryptographicLength
 
 from kmip.core.enums import ObjectType
-
 from kmip.core.errors import ErrorStrings
+
+from kmip.core.misc import KeyFormatType
 
 from kmip.core.objects import Attribute
 from kmip.core.objects import KeyBlock
+from kmip.core.objects import KeyMaterial
 from kmip.core.objects import KeyWrappingData
-from kmip.core.objects import KeyValueStruct
 from kmip.core.objects import KeyValue
 
+from kmip.core.secrets import Certificate
+from kmip.core.secrets import OpaqueObject
+from kmip.core.secrets import PrivateKey
+from kmip.core.secrets import PublicKey
+from kmip.core.secrets import SecretData
 from kmip.core.secrets import SymmetricKey
 from kmip.core.secrets import Template
 
@@ -43,7 +49,26 @@ class SecretFactory(object):
         self.template_input = self.base_error.format('Template', '{0}', '{1}',
                                                      '{2}')
 
-    def create_secret(self, secret_type, value=None):
+    def create(self, secret_type, value=None):
+        """
+        Create a secret object of the specified type with the given value.
+
+        Args:
+            secret_type (ObjectType): An ObjectType enumeration specifying the
+                type of secret to create.
+            value (dict): A dictionary containing secret data. Optional,
+                defaults to None.
+
+        Returns:
+            secret: The newly constructed secret object.
+
+        Raises:
+            TypeError: If the provided secret type is unrecognized.
+
+        Example:
+            >>> factory.create(ObjectType.SYMMETRIC_KEY)
+            SymmetricKey(...)
+        """
         if secret_type is ObjectType.CERTIFICATE:
             return self._create_certificate(value)
         elif secret_type is ObjectType.SYMMETRIC_KEY:
@@ -60,57 +85,39 @@ class SecretFactory(object):
             return self._create_secret_data(value)
         elif secret_type is ObjectType.OPAQUE_DATA:
             return self._create_opaque_data(value)
+        else:
+            raise TypeError("Unrecognized secret type: {0}".format(
+                secret_type))
 
     def _create_certificate(self, value):
-        raise NotImplementedError()
+        if value:
+            return Certificate(
+                certificate_type=value.get('certificate_type'),
+                certificate_value=value.get('certificate_value')
+            )
+        else:
+            return Certificate()
 
     def _create_symmetric_key(self, value):
         if value is None:
             return SymmetricKey()
         else:
-            key_type = value.get('key_format_type')
-            key_compression_type = value.get('key_compression_type')
-            key_value = value.get('key_value')
-            cryptographic_algorithm = value.get('cryptographic_algorithm')
-            cryptographic_length = value.get('cryptographic_length')
-            key_wrapping_data = value.get('key_wrapping_data')
-
-            key_format_type = KeyBlock.KeyFormatType(key_type)
-
-            key_comp_type = None
-            if key_compression_type is not None:
-                key_comp_type = KeyBlock.KeyCompressionType(
-                    key_compression_type)
-
-            key_material = self.key_factory.create_key(key_type,
-                                                       key_value)
-            key_val_struc = KeyValueStruct(key_format_type=key_format_type,
-                                           key_material=key_material)
-            key_value = KeyValue(key_value=key_val_struc,
-                                 key_format_type=key_format_type)
-            crypto_algorithm = CryptographicAlgorithm(cryptographic_algorithm)
-            crypto_length = CryptographicLength(cryptographic_length)
-
-            key_wrap_data = None
-            if key_wrapping_data is not None:
-                # TODO (peter-hamilton) This currently isn't used in the tests
-                # TODO (peter-hamilton) but needs to be updated to properly
-                # TODO (peter-hamilton) create a KeyWrappingData object.
-                key_wrap_data = KeyWrappingData(key_wrapping_data)
-
-            key_block = KeyBlock(key_format_type,
-                                 key_comp_type,
-                                 key_value,
-                                 crypto_algorithm,
-                                 crypto_length,
-                                 key_wrap_data)
+            key_block = self._build_key_block(value)
             return SymmetricKey(key_block)
 
     def _create_public_key(self, value):
-        raise NotImplementedError()
+        if value is None:
+            return PublicKey()
+        else:
+            key_block = self._build_key_block(value)
+            return PublicKey(key_block)
 
     def _create_private_key(self, value):
-        raise NotImplementedError()
+        if value is None:
+            return PrivateKey()
+        else:
+            key_block = self._build_key_block(value)
+            return PrivateKey(key_block)
 
     def _create_split_key(self, value):
         raise NotImplementedError()
@@ -134,7 +141,58 @@ class SecretFactory(object):
             return Template(value)
 
     def _create_secret_data(self, value):
-        raise NotImplementedError()
+        if value:
+            kind = SecretData.SecretDataType(value.get("secret_data_type"))
+            key_block = self._build_key_block(value)
+            return SecretData(kind, key_block)
+        return SecretData()
 
     def _create_opaque_data(self, value):
-        raise NotImplementedError()
+        if value:
+            kind = OpaqueObject.OpaqueDataType(value.get("opaque_data_type"))
+            data = OpaqueObject.OpaqueDataValue(value.get("opaque_data_value"))
+            return OpaqueObject(kind, data)
+        return OpaqueObject()
+
+    def _build_key_block(self, value):
+            key_type = value.get('key_format_type')
+            key_compression_type = value.get('key_compression_type')
+            key_value = value.get('key_value')
+            cryptographic_algorithm = value.get('cryptographic_algorithm')
+            cryptographic_length = value.get('cryptographic_length')
+            key_wrapping_data = value.get('key_wrapping_data')
+
+            key_format_type = KeyFormatType(key_type)
+
+            key_comp_type = None
+            if key_compression_type is not None:
+                key_comp_type = KeyBlock.KeyCompressionType(
+                    key_compression_type)
+
+            key_material = KeyMaterial(key_value)
+            key_value = KeyValue(key_material)
+
+            crypto_algorithm = None
+            if cryptographic_algorithm is not None:
+                crypto_algorithm = CryptographicAlgorithm(
+                    cryptographic_algorithm
+                )
+
+            crypto_length = None
+            if cryptographic_length is not None:
+                crypto_length = CryptographicLength(cryptographic_length)
+
+            key_wrap_data = None
+            if key_wrapping_data is not None:
+                # TODO (peter-hamilton) This currently isn't used in the tests
+                # TODO (peter-hamilton) but needs to be updated to properly
+                # TODO (peter-hamilton) create a KeyWrappingData object.
+                key_wrap_data = KeyWrappingData(key_wrapping_data)
+
+            key_block = KeyBlock(key_format_type,
+                                 key_comp_type,
+                                 key_value,
+                                 crypto_algorithm,
+                                 crypto_length,
+                                 key_wrap_data)
+            return key_block
