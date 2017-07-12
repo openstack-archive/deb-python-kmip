@@ -43,6 +43,7 @@ from kmip.core.messages.payloads import activate
 from kmip.core.messages.payloads import revoke
 from kmip.core.messages.payloads import create
 from kmip.core.messages.payloads import create_key_pair
+from kmip.core.messages.payloads import derive_key
 from kmip.core.messages.payloads import destroy
 from kmip.core.messages.payloads import discover_versions
 from kmip.core.messages.payloads import encrypt
@@ -3468,6 +3469,619 @@ class TestKmipEngine(testtools.TestCase):
             *args
         )
 
+    def test_derive_key(self):
+        """
+        Test that a DeriveKey request can be processed correctly.
+        """
+        e = engine.KmipEngine()
+        e._data_store = self.engine
+        e._data_store_session_factory = self.session_factory
+        e._data_session = e._data_store_session_factory()
+        e._logger = mock.MagicMock()
+        e._cryptography_engine.logger = mock.MagicMock()
+
+        base_key = pie_objects.SymmetricKey(
+            algorithm=enums.CryptographicAlgorithm.HMAC_SHA256,
+            length=160,
+            value=(
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b'
+            ),
+            masks=[enums.CryptographicUsageMask.DERIVE_KEY]
+        )
+        e._data_session.add(base_key)
+        e._data_session.commit()
+        e._data_session = e._data_store_session_factory()
+
+        attribute_factory = factory.AttributeFactory()
+
+        # Derive a SymmetricKey object.
+        payload = derive_key.DeriveKeyRequestPayload(
+            object_type=enums.ObjectType.SYMMETRIC_KEY,
+            unique_identifiers=[str(base_key.unique_identifier)],
+            derivation_method=enums.DerivationMethod.HMAC,
+            derivation_parameters=attributes.DerivationParameters(
+                cryptographic_parameters=attributes.CryptographicParameters(
+                    hashing_algorithm=enums.HashingAlgorithm.SHA_256
+                ),
+                derivation_data=b'\x48\x69\x20\x54\x68\x65\x72\x65',
+            ),
+            template_attribute=objects.TemplateAttribute(
+                attributes=[
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_LENGTH,
+                        256
+                    ),
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_ALGORITHM,
+                        enums.CryptographicAlgorithm.AES
+                    )
+                ]
+            )
+        )
+
+        response_payload = e._process_derive_key(payload)
+
+        e._logger.info.assert_any_call("Processing operation: DeriveKey")
+        e._logger.info.assert_any_call(
+            "Object 1 will be used as the keying material for the derivation "
+            "process."
+        )
+        e._logger.info.assert_any_call("Created a SymmetricKey with ID: 2")
+
+        self.assertEqual("2", response_payload.unique_identifier)
+
+        managed_object = e._data_session.query(
+            pie_objects.SymmetricKey
+        ).filter(
+            pie_objects.SymmetricKey.unique_identifier == 2
+        ).one()
+
+        self.assertEqual(
+            (
+                b'\xb0\x34\x4c\x61\xd8\xdb\x38\x53'
+                b'\x5c\xa8\xaf\xce\xaf\x0b\xf1\x2b'
+                b'\x88\x1d\xc2\x00\xc9\x83\x3d\xa7'
+                b'\x26\xe9\x37\x6c\x2e\x32\xcf\xf7'
+            ),
+            managed_object.value
+        )
+        self.assertEqual(
+            enums.CryptographicAlgorithm.AES,
+            managed_object.cryptographic_algorithm
+        )
+        self.assertEqual(
+            256,
+            managed_object.cryptographic_length
+        )
+        self.assertIsNotNone(managed_object.initial_date)
+
+        e._logger.reset_mock()
+
+        base_key = pie_objects.SymmetricKey(
+            algorithm=enums.CryptographicAlgorithm.BLOWFISH,
+            length=128,
+            value=(
+                b'\x01\x23\x45\x67\x89\xAB\xCD\xEF'
+                b'\xF0\xE1\xD2\xC3\xB4\xA5\x96\x87'
+            ),
+            masks=[enums.CryptographicUsageMask.DERIVE_KEY]
+        )
+        e._data_session.add(base_key)
+        e._data_session.commit()
+        e._data_session = e._data_store_session_factory()
+
+        # Derive a SecretData object.
+        payload = derive_key.DeriveKeyRequestPayload(
+            object_type=enums.ObjectType.SECRET_DATA,
+            unique_identifiers=[str(base_key.unique_identifier)],
+            derivation_method=enums.DerivationMethod.ENCRYPT,
+            derivation_parameters=attributes.DerivationParameters(
+                cryptographic_parameters=attributes.CryptographicParameters(
+                    block_cipher_mode=enums.BlockCipherMode.CBC,
+                    padding_method=enums.PaddingMethod.PKCS5,
+                    hashing_algorithm=enums.HashingAlgorithm.SHA_256,
+                    cryptographic_algorithm=(
+                        enums.CryptographicAlgorithm.BLOWFISH
+                    )
+                ),
+                initialization_vector=b'\xFE\xDC\xBA\x98\x76\x54\x32\x10',
+                derivation_data=(
+                    b'\x37\x36\x35\x34\x33\x32\x31\x20'
+                    b'\x4E\x6F\x77\x20\x69\x73\x20\x74'
+                    b'\x68\x65\x20\x74\x69\x6D\x65\x20'
+                    b'\x66\x6F\x72\x20\x00'
+                ),
+            ),
+            template_attribute=objects.TemplateAttribute(
+                attributes=[
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_LENGTH,
+                        256
+                    )
+                ]
+            )
+        )
+
+        response_payload = e._process_derive_key(payload)
+
+        e._logger.info.assert_any_call("Processing operation: DeriveKey")
+        e._logger.info.assert_any_call(
+            "Object 3 will be used as the keying material for the derivation "
+            "process."
+        )
+        e._logger.info.assert_any_call("Created a SecretData with ID: 4")
+
+        self.assertEqual("4", response_payload.unique_identifier)
+
+        managed_object = e._data_session.query(
+            pie_objects.SecretData
+        ).filter(
+            pie_objects.SecretData.unique_identifier == 4
+        ).one()
+
+        self.assertEqual(
+            (
+                b'\x6B\x77\xB4\xD6\x30\x06\xDE\xE6'
+                b'\x05\xB1\x56\xE2\x74\x03\x97\x93'
+                b'\x58\xDE\xB9\xE7\x15\x46\x16\xD9'
+                b'\x74\x9D\xEC\xBE\xC0\x5D\x26\x4B'
+            ),
+            managed_object.value
+        )
+        self.assertEqual(enums.SecretDataType.SEED, managed_object.data_type)
+        self.assertIsNotNone(managed_object.initial_date)
+
+    def test_derive_key_invalid_derivation_type(self):
+        """
+        Test that the right error is thrown when an invalid derivation type
+        is provided with a DeriveKey request.
+        """
+        e = engine.KmipEngine()
+        e._data_store = self.engine
+        e._data_store_session_factory = self.session_factory
+        e._data_session = e._data_store_session_factory()
+        e._logger = mock.MagicMock()
+        e._cryptography_engine.logger = mock.MagicMock()
+
+        payload = derive_key.DeriveKeyRequestPayload(
+            object_type=enums.ObjectType.CERTIFICATE
+        )
+
+        args = (payload, )
+        self.assertRaisesRegexp(
+            exceptions.InvalidField,
+            "Key derivation can only generate a SymmetricKey or SecretData "
+            "object.",
+            e._process_derive_key,
+            *args
+        )
+
+    def test_derive_key_invalid_base_key(self):
+        """
+        Test that the right error is thrown when an object not suitable for
+        key derivation is provided as the base key with a DeriveKey request.
+        """
+        e = engine.KmipEngine()
+        e._data_store = self.engine
+        e._data_store_session_factory = self.session_factory
+        e._data_session = e._data_store_session_factory()
+        e._logger = mock.MagicMock()
+        e._cryptography_engine.logger = mock.MagicMock()
+
+        invalid_key = pie_objects.OpaqueObject(
+            b'\x01\x02\x04\x08\x10\x20\x40\x80',
+            enums.OpaqueDataType.NONE
+        )
+        e._data_session.add(invalid_key)
+        e._data_session.commit()
+        e._data_session = e._data_store_session_factory()
+
+        payload = derive_key.DeriveKeyRequestPayload(
+            object_type=enums.ObjectType.SECRET_DATA,
+            unique_identifiers=[str(invalid_key.unique_identifier)]
+        )
+
+        args = (payload, )
+        self.assertRaisesRegexp(
+            exceptions.InvalidField,
+            "Object 1 is not a suitable type for key derivation. Please "
+            "specify a key or secret data.",
+            e._process_derive_key,
+            *args
+        )
+
+    def test_derive_key_non_derivable_base_key(self):
+        """
+        Test that the right error is thrown when an object suitable for
+        key derivation but not marked as such is provided as the base key
+        with a DeriveKey request.
+        """
+        e = engine.KmipEngine()
+        e._data_store = self.engine
+        e._data_store_session_factory = self.session_factory
+        e._data_session = e._data_store_session_factory()
+        e._logger = mock.MagicMock()
+        e._cryptography_engine.logger = mock.MagicMock()
+
+        base_key = pie_objects.SymmetricKey(
+            enums.CryptographicAlgorithm.AES,
+            128,
+            (
+                b'\x00\x01\x02\x03\x04\x05\x06\x07'
+                b'\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F'
+            ),
+            [enums.CryptographicUsageMask.ENCRYPT]
+        )
+        e._data_session.add(base_key)
+        e._data_session.commit()
+        e._data_session = e._data_store_session_factory()
+
+        payload = derive_key.DeriveKeyRequestPayload(
+            object_type=enums.ObjectType.SECRET_DATA,
+            unique_identifiers=[str(base_key.unique_identifier)]
+        )
+
+        args = (payload, )
+        self.assertRaisesRegexp(
+            exceptions.InvalidField,
+            "The DeriveKey bit must be set in the cryptographic usage mask "
+            "for object 1 for it to be used in key derivation.",
+            e._process_derive_key,
+            *args
+        )
+
+    def test_derive_key_alternate_derivation_data(self):
+        """
+        Test that a DeriveKey request can be processed correctly by
+        specifying multiple base objects and no derivation data.
+        """
+        e = engine.KmipEngine()
+        e._data_store = self.engine
+        e._data_store_session_factory = self.session_factory
+        e._data_session = e._data_store_session_factory()
+        e._logger = mock.MagicMock()
+        e._cryptography_engine.logger = mock.MagicMock()
+
+        base_key = pie_objects.SymmetricKey(
+            algorithm=enums.CryptographicAlgorithm.HMAC_SHA256,
+            length=160,
+            value=(
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b'
+            ),
+            masks=[enums.CryptographicUsageMask.DERIVE_KEY]
+        )
+        e._data_session.add(base_key)
+        e._data_session.commit()
+        e._data_session = e._data_store_session_factory()
+
+        base_data = pie_objects.SecretData(
+            value=b'\x48\x69\x20\x54\x68\x65\x72\x65',
+            data_type=enums.SecretDataType.SEED,
+            masks=[enums.CryptographicUsageMask.DERIVE_KEY]
+        )
+        e._data_session.add(base_data)
+        e._data_session.commit()
+        e._data_session = e._data_store_session_factory()
+
+        attribute_factory = factory.AttributeFactory()
+
+        payload = derive_key.DeriveKeyRequestPayload(
+            object_type=enums.ObjectType.SYMMETRIC_KEY,
+            unique_identifiers=[
+                str(base_key.unique_identifier),
+                str(base_data.unique_identifier)
+            ],
+            derivation_method=enums.DerivationMethod.HMAC,
+            derivation_parameters=attributes.DerivationParameters(
+                cryptographic_parameters=attributes.CryptographicParameters(
+                    hashing_algorithm=enums.HashingAlgorithm.SHA_256
+                )
+            ),
+            template_attribute=objects.TemplateAttribute(
+                attributes=[
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_LENGTH,
+                        256
+                    ),
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_ALGORITHM,
+                        enums.CryptographicAlgorithm.AES
+                    )
+                ]
+            )
+        )
+
+        response_payload = e._process_derive_key(payload)
+
+        e._logger.info.assert_any_call("Processing operation: DeriveKey")
+        e._logger.info.assert_any_call(
+            "2 derivation objects specified with the DeriveKey request."
+        )
+        e._logger.info.assert_any_call(
+            "Object 1 will be used as the keying material for the derivation "
+            "process."
+        )
+        e._logger.info.assert_any_call(
+            "Object 2 will be used as the derivation data for the derivation "
+            "process."
+        )
+        e._logger.info.assert_any_call("Created a SymmetricKey with ID: 3")
+
+        self.assertEqual("3", response_payload.unique_identifier)
+
+        managed_object = e._data_session.query(
+            pie_objects.SymmetricKey
+        ).filter(
+            pie_objects.SymmetricKey.unique_identifier == 3
+        ).one()
+
+        self.assertEqual(
+            (
+                b'\xb0\x34\x4c\x61\xd8\xdb\x38\x53'
+                b'\x5c\xa8\xaf\xce\xaf\x0b\xf1\x2b'
+                b'\x88\x1d\xc2\x00\xc9\x83\x3d\xa7'
+                b'\x26\xe9\x37\x6c\x2e\x32\xcf\xf7'
+            ),
+            managed_object.value
+        )
+        self.assertEqual(
+            enums.CryptographicAlgorithm.AES,
+            managed_object.cryptographic_algorithm
+        )
+        self.assertEqual(
+            256,
+            managed_object.cryptographic_length
+        )
+        self.assertIsNotNone(managed_object.initial_date)
+
+    def test_derive_key_unspecified_iv(self):
+        """
+        """
+        self.skip('')
+
+    def test_derive_key_missing_cryptographic_length(self):
+        """
+        Test that the right error is thrown when the cryptographic length is
+        missing from a DeriveKey request.
+        """
+        e = engine.KmipEngine()
+        e._data_store = self.engine
+        e._data_store_session_factory = self.session_factory
+        e._data_session = e._data_store_session_factory()
+        e._logger = mock.MagicMock()
+        e._cryptography_engine.logger = mock.MagicMock()
+
+        base_key = pie_objects.SymmetricKey(
+            algorithm=enums.CryptographicAlgorithm.HMAC_SHA256,
+            length=160,
+            value=(
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b'
+            ),
+            masks=[enums.CryptographicUsageMask.DERIVE_KEY]
+        )
+        e._data_session.add(base_key)
+        e._data_session.commit()
+        e._data_session = e._data_store_session_factory()
+
+        attribute_factory = factory.AttributeFactory()
+
+        payload = derive_key.DeriveKeyRequestPayload(
+            object_type=enums.ObjectType.SYMMETRIC_KEY,
+            unique_identifiers=[str(base_key.unique_identifier)],
+            derivation_method=enums.DerivationMethod.HMAC,
+            derivation_parameters=attributes.DerivationParameters(
+                cryptographic_parameters=attributes.CryptographicParameters(
+                    hashing_algorithm=enums.HashingAlgorithm.SHA_256
+                ),
+                derivation_data=b'\x48\x69\x20\x54\x68\x65\x72\x65',
+            ),
+            template_attribute=objects.TemplateAttribute(
+                attributes=[
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_ALGORITHM,
+                        enums.CryptographicAlgorithm.AES
+                    )
+                ]
+            )
+        )
+
+        args = (payload, )
+        self.assertRaisesRegexp(
+            exceptions.InvalidField,
+            "The cryptographic length must be provided in the template "
+            "attribute.",
+            e._process_derive_key,
+            *args
+        )
+
+    def test_derive_key_invalid_cryptographic_length(self):
+        """
+        Test that the right error is thrown when an invalid cryptographic
+        length is provided with a DeriveKey request.
+        """
+        e = engine.KmipEngine()
+        e._data_store = self.engine
+        e._data_store_session_factory = self.session_factory
+        e._data_session = e._data_store_session_factory()
+        e._logger = mock.MagicMock()
+        e._cryptography_engine.logger = mock.MagicMock()
+
+        base_key = pie_objects.SymmetricKey(
+            algorithm=enums.CryptographicAlgorithm.HMAC_SHA256,
+            length=160,
+            value=(
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b'
+            ),
+            masks=[enums.CryptographicUsageMask.DERIVE_KEY]
+        )
+        e._data_session.add(base_key)
+        e._data_session.commit()
+        e._data_session = e._data_store_session_factory()
+
+        attribute_factory = factory.AttributeFactory()
+
+        payload = derive_key.DeriveKeyRequestPayload(
+            object_type=enums.ObjectType.SYMMETRIC_KEY,
+            unique_identifiers=[str(base_key.unique_identifier)],
+            derivation_method=enums.DerivationMethod.HMAC,
+            derivation_parameters=attributes.DerivationParameters(
+                cryptographic_parameters=attributes.CryptographicParameters(
+                    hashing_algorithm=enums.HashingAlgorithm.SHA_256
+                ),
+                derivation_data=b'\x48\x69\x20\x54\x68\x65\x72\x65',
+            ),
+            template_attribute=objects.TemplateAttribute(
+                attributes=[
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_LENGTH,
+                        123
+                    ),
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_ALGORITHM,
+                        enums.CryptographicAlgorithm.AES
+                    )
+                ]
+            )
+        )
+
+        args = (payload, )
+        self.assertRaisesRegexp(
+            exceptions.InvalidField,
+            "The cryptographic length must correspond to a valid number of "
+            "bytes \(i.e., it must be a multiple of 8\).",
+            e._process_derive_key,
+            *args
+        )
+
+    def test_derive_key_missing_cryptographic_algorithm(self):
+        """
+        Test that the right error is thrown when the cryptographic algorithm
+        is missing from a DeriveKey request when deriving a symmetric key.
+        """
+        e = engine.KmipEngine()
+        e._data_store = self.engine
+        e._data_store_session_factory = self.session_factory
+        e._data_session = e._data_store_session_factory()
+        e._logger = mock.MagicMock()
+        e._cryptography_engine.logger = mock.MagicMock()
+
+        base_key = pie_objects.SymmetricKey(
+            algorithm=enums.CryptographicAlgorithm.HMAC_SHA256,
+            length=160,
+            value=(
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b'
+            ),
+            masks=[enums.CryptographicUsageMask.DERIVE_KEY]
+        )
+        e._data_session.add(base_key)
+        e._data_session.commit()
+        e._data_session = e._data_store_session_factory()
+
+        attribute_factory = factory.AttributeFactory()
+
+        payload = derive_key.DeriveKeyRequestPayload(
+            object_type=enums.ObjectType.SYMMETRIC_KEY,
+            unique_identifiers=[str(base_key.unique_identifier)],
+            derivation_method=enums.DerivationMethod.HMAC,
+            derivation_parameters=attributes.DerivationParameters(
+                cryptographic_parameters=attributes.CryptographicParameters(
+                    hashing_algorithm=enums.HashingAlgorithm.SHA_256
+                ),
+                derivation_data=b'\x48\x69\x20\x54\x68\x65\x72\x65',
+            ),
+            template_attribute=objects.TemplateAttribute(
+                attributes=[
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_LENGTH,
+                        256
+                    )
+                ]
+            )
+        )
+
+        args = (payload, )
+        self.assertRaisesRegexp(
+            exceptions.InvalidField,
+            "The cryptographic algorithm must be provided in the template "
+            "attribute when deriving a symmetric key.",
+            e._process_derive_key,
+            *args
+        )
+
+    def test_derive_key_oversized_cryptographic_length(self):
+        """
+        Test that the right error is thrown when an invalid cryptographic
+        length is provided with a DeriveKey request.
+        """
+        e = engine.KmipEngine()
+        e._data_store = self.engine
+        e._data_store_session_factory = self.session_factory
+        e._data_session = e._data_store_session_factory()
+        e._logger = mock.MagicMock()
+        e._cryptography_engine.logger = mock.MagicMock()
+
+        base_key = pie_objects.SymmetricKey(
+            algorithm=enums.CryptographicAlgorithm.HMAC_SHA256,
+            length=160,
+            value=(
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b'
+                b'\x0b\x0b\x0b\x0b'
+            ),
+            masks=[enums.CryptographicUsageMask.DERIVE_KEY]
+        )
+        e._data_session.add(base_key)
+        e._data_session.commit()
+        e._data_session = e._data_store_session_factory()
+
+        e._cryptography_engine = mock.MagicMock()
+        e._cryptography_engine.derive_key.return_value = b''
+
+        attribute_factory = factory.AttributeFactory()
+
+        payload = derive_key.DeriveKeyRequestPayload(
+            object_type=enums.ObjectType.SYMMETRIC_KEY,
+            unique_identifiers=[str(base_key.unique_identifier)],
+            derivation_method=enums.DerivationMethod.HMAC,
+            derivation_parameters=attributes.DerivationParameters(
+                cryptographic_parameters=attributes.CryptographicParameters(
+                    hashing_algorithm=enums.HashingAlgorithm.SHA_256
+                ),
+                derivation_data=b'\x48\x69\x20\x54\x68\x65\x72\x65',
+            ),
+            template_attribute=objects.TemplateAttribute(
+                attributes=[
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_LENGTH,
+                        256
+                    ),
+                    attribute_factory.create_attribute(
+                        enums.AttributeType.CRYPTOGRAPHIC_ALGORITHM,
+                        enums.CryptographicAlgorithm.AES
+                    )
+                ]
+            )
+        )
+
+        args = (payload, )
+        self.assertRaisesRegexp(
+            exceptions.CryptographicFailure,
+            "The specified length exceeds the output of the derivation "
+            "method.",
+            e._process_derive_key,
+            *args
+        )
+
     def test_locate(self):
         """
         Test that a Locate request can be processed correctly.
@@ -4848,7 +5462,7 @@ class TestKmipEngine(testtools.TestCase):
         e._logger.info.assert_called_once_with("Processing operation: Query")
         self.assertIsInstance(result, query.QueryResponsePayload)
         self.assertIsNotNone(result.operations)
-        self.assertEqual(10, len(result.operations))
+        self.assertEqual(11, len(result.operations))
         self.assertEqual(
             enums.Operation.CREATE,
             result.operations[0].value
@@ -4862,32 +5476,36 @@ class TestKmipEngine(testtools.TestCase):
             result.operations[2].value
         )
         self.assertEqual(
-            enums.Operation.LOCATE,
+            enums.Operation.DERIVE_KEY,
             result.operations[3].value
         )
         self.assertEqual(
-            enums.Operation.GET,
+            enums.Operation.LOCATE,
             result.operations[4].value
         )
         self.assertEqual(
-            enums.Operation.GET_ATTRIBUTES,
+            enums.Operation.GET,
             result.operations[5].value
         )
         self.assertEqual(
-            enums.Operation.GET_ATTRIBUTE_LIST,
+            enums.Operation.GET_ATTRIBUTES,
             result.operations[6].value
         )
         self.assertEqual(
-            enums.Operation.ACTIVATE,
+            enums.Operation.GET_ATTRIBUTE_LIST,
             result.operations[7].value
         )
         self.assertEqual(
-            enums.Operation.DESTROY,
+            enums.Operation.ACTIVATE,
             result.operations[8].value
         )
         self.assertEqual(
-            enums.Operation.QUERY,
+            enums.Operation.DESTROY,
             result.operations[9].value
+        )
+        self.assertEqual(
+            enums.Operation.QUERY,
+            result.operations[10].value
         )
         self.assertEqual(list(), result.object_types)
         self.assertIsNotNone(result.vendor_identification)
@@ -4926,7 +5544,7 @@ class TestKmipEngine(testtools.TestCase):
         e._logger.info.assert_called_once_with("Processing operation: Query")
         self.assertIsInstance(result, query.QueryResponsePayload)
         self.assertIsNotNone(result.operations)
-        self.assertEqual(11, len(result.operations))
+        self.assertEqual(12, len(result.operations))
         self.assertEqual(
             enums.Operation.CREATE,
             result.operations[0].value
@@ -4940,36 +5558,40 @@ class TestKmipEngine(testtools.TestCase):
             result.operations[2].value
         )
         self.assertEqual(
-            enums.Operation.LOCATE,
+            enums.Operation.DERIVE_KEY,
             result.operations[3].value
         )
         self.assertEqual(
-            enums.Operation.GET,
+            enums.Operation.LOCATE,
             result.operations[4].value
         )
         self.assertEqual(
-            enums.Operation.GET_ATTRIBUTES,
+            enums.Operation.GET,
             result.operations[5].value
         )
         self.assertEqual(
-            enums.Operation.GET_ATTRIBUTE_LIST,
+            enums.Operation.GET_ATTRIBUTES,
             result.operations[6].value
         )
         self.assertEqual(
-            enums.Operation.ACTIVATE,
+            enums.Operation.GET_ATTRIBUTE_LIST,
             result.operations[7].value
         )
         self.assertEqual(
-            enums.Operation.DESTROY,
+            enums.Operation.ACTIVATE,
             result.operations[8].value
         )
         self.assertEqual(
-            enums.Operation.QUERY,
+            enums.Operation.DESTROY,
             result.operations[9].value
         )
         self.assertEqual(
-            enums.Operation.DISCOVER_VERSIONS,
+            enums.Operation.QUERY,
             result.operations[10].value
+        )
+        self.assertEqual(
+            enums.Operation.DISCOVER_VERSIONS,
+            result.operations[11].value
         )
         self.assertEqual(list(), result.object_types)
         self.assertIsNotNone(result.vendor_identification)
@@ -5008,7 +5630,7 @@ class TestKmipEngine(testtools.TestCase):
         e._logger.info.assert_called_once_with("Processing operation: Query")
         self.assertIsInstance(result, query.QueryResponsePayload)
         self.assertIsNotNone(result.operations)
-        self.assertEqual(13, len(result.operations))
+        self.assertEqual(14, len(result.operations))
         self.assertEqual(
             enums.Operation.CREATE,
             result.operations[0].value
@@ -5022,44 +5644,48 @@ class TestKmipEngine(testtools.TestCase):
             result.operations[2].value
         )
         self.assertEqual(
-            enums.Operation.LOCATE,
+            enums.Operation.DERIVE_KEY,
             result.operations[3].value
         )
         self.assertEqual(
-            enums.Operation.GET,
+            enums.Operation.LOCATE,
             result.operations[4].value
         )
         self.assertEqual(
-            enums.Operation.GET_ATTRIBUTES,
+            enums.Operation.GET,
             result.operations[5].value
         )
         self.assertEqual(
-            enums.Operation.GET_ATTRIBUTE_LIST,
+            enums.Operation.GET_ATTRIBUTES,
             result.operations[6].value
         )
         self.assertEqual(
-            enums.Operation.ACTIVATE,
+            enums.Operation.GET_ATTRIBUTE_LIST,
             result.operations[7].value
         )
         self.assertEqual(
-            enums.Operation.DESTROY,
+            enums.Operation.ACTIVATE,
             result.operations[8].value
         )
         self.assertEqual(
-            enums.Operation.QUERY,
+            enums.Operation.DESTROY,
             result.operations[9].value
         )
         self.assertEqual(
-            enums.Operation.DISCOVER_VERSIONS,
+            enums.Operation.QUERY,
             result.operations[10].value
         )
         self.assertEqual(
-            enums.Operation.ENCRYPT,
+            enums.Operation.DISCOVER_VERSIONS,
             result.operations[11].value
         )
         self.assertEqual(
-            enums.Operation.MAC,
+            enums.Operation.ENCRYPT,
             result.operations[12].value
+        )
+        self.assertEqual(
+            enums.Operation.MAC,
+            result.operations[13].value
         )
         self.assertEqual(list(), result.object_types)
         self.assertIsNotNone(result.vendor_identification)
