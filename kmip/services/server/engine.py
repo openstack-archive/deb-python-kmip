@@ -1389,14 +1389,6 @@ class KmipEngine(object):
                 "Key compression is not supported."
             )
 
-        if payload.key_wrapping_specification:
-            raise exceptions.PermissionDenied(
-                "Key wrapping is not supported."
-            )
-
-        # TODO (peterhamilton) Process key wrapping information
-        # 1. Error check wrapping keys for accessibility and usability
-
         managed_object = self._get_object_with_access_controls(
             unique_identifier,
             enums.Operation.GET
@@ -1426,7 +1418,80 @@ class KmipEngine(object):
             )
         )
 
-        core_secret = self._build_core_object(managed_object)
+        if payload.key_wrapping_specification:
+            key_wrapping_spec = payload.key_wrapping_specification
+            if key_wrapping_spec.encryption_key_information:
+                key_info = key_wrapping_spec.encryption_key_information
+                encryption_key_uuid = key_info.unique_identifier
+                encryption_key_params = key_info.cryptographic_parameters
+
+                try:
+                    key = self._get_object_with_access_controls(
+                        encryption_key_uuid,
+                        enums.Operation.GET
+                    )
+                except Exception:
+                    raise exceptions.ItemNotFound(
+                        "Wrapping key does not exist."
+                    )
+
+                if key._object_type != enums.ObjectType.SYMMETRIC_KEY:
+                    raise exceptions.IllegalOperation(
+                        "The wrapping encryption key specified by the "
+                        "encryption key information is not a key."
+                    )
+
+                if key.state != enums.State.ACTIVE:
+                    raise exceptions.PermissionDenied(
+                        "Encryption key {0} must be activated to be used for "
+                        "key wrapping.".format(encryption_key_uuid)
+                    )
+
+                mask = enums.CryptographicUsageMask.WRAP_KEY
+                if mask not in key.cryptographic_usage_masks:
+                    raise exceptions.PermissionDenied(
+                        "The WrapKey bit must be set in the cryptographic "
+                        "usage mask of encryption key {0} for it to be used "
+                        "for key wrapping.".format(encryption_key_uuid)
+                    )
+
+                if key_wrapping_spec.attribute_names:
+                    raise exceptions.IllegalOperation(
+                        "Wrapping object attributes is not supported."
+                    )
+
+                encoding_option = key_wrapping_spec.encoding_option
+                if encoding_option != enums.EncodingOption.NO_ENCODING:
+                    raise exceptions.EncodingOptionError(
+                        "Encoding option '{0}' is not supported.".format(
+                            encoding_option
+                        )
+                    )
+
+                result = self._cryptography_engine.wrap_key(
+                    key_material=managed_object.value,
+                    wrapping_method=key_wrapping_spec.wrapping_method,
+                    key_wrap_algorithm=encryption_key_params.block_cipher_mode,
+                    encryption_key=key.value
+                )
+
+                wrapped_object = copy.deepcopy(managed_object)
+                wrapped_object.value = result
+
+                core_secret = self._build_core_object(wrapped_object)
+
+            elif key_wrapping_spec.mac_signature_key_information:
+                raise exceptions.PermissionDenied(
+                    "Key wrapping via MAC/signing is not supported."
+                )
+            else:
+                raise exceptions.PermissionDenied(
+                    "Either the encryption key information or the "
+                    "MAC/signature key information must be specified for key "
+                    "wrapping to be performed."
+                )
+        else:
+            core_secret = self._build_core_object(managed_object)
 
         response_payload = get.GetResponsePayload(
             object_type=managed_object._object_type,
