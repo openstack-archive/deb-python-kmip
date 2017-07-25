@@ -14,7 +14,6 @@
 # under the License.
 
 import json
-import six
 
 from kmip.core import enums
 
@@ -31,13 +30,13 @@ def read_policy_from_file(path):
 
     policies = dict()
 
-    for name, object_policies in six.iteritems(policy_blob):
+    for name, object_policies in policy_blob.items():
         processed_object_policies = dict()
 
-        for object_type, operation_policies in six.iteritems(object_policies):
+        for object_type, operation_policies in object_policies.items():
             processed_operation_policies = dict()
 
-            for operation, permission in six.iteritems(operation_policies):
+            for operation, permission in operation_policies.items():
 
                 try:
                     enum_operation = enums.Operation[operation]

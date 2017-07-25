@@ -784,7 +784,7 @@ class KmipEngine(object):
         Given a kmip.pie object and a dictionary of attributes, attempt to set
         the attribute values on the object.
         """
-        for attribute_name, attribute_value in six.iteritems(attributes):
+        for attribute_name, attribute_value in attributes.items():
             object_type = managed_object._object_type
             if self._attribute_policy.is_attribute_applicable_to_object_type(
                     attribute_name,
@@ -1112,7 +1112,7 @@ class KmipEngine(object):
 
         # Propagate common attributes if not overridden by the public/private
         # attribute sets
-        for key, value in six.iteritems(common_attributes):
+        for key, value in (common_attributes).items():
             if key not in public_key_attributes.keys():
                 public_key_attributes.update([(key, value)])
             if key not in private_key_attributes.keys():
@@ -1337,7 +1337,7 @@ class KmipEngine(object):
         self._logger.info("Processing operation: Locate")
 
         managed_objects = self._list_objects_with_access_controls(
-                                enums.Operation.LOCATE)
+            enums.Operation.LOCATE)
 
         if payload.attributes:
 
@@ -1351,7 +1351,7 @@ class KmipEngine(object):
                     attribute_name = attribute.attribute_name.value
                     attribute_value = attribute.attribute_value
                     attr = self._get_attribute_from_managed_object(
-                            managed_object, attribute_name)
+                        managed_object, attribute_name)
                     if attribute_name == 'Name':
                         names = attr
                         if attribute_value not in names:
@@ -1363,8 +1363,8 @@ class KmipEngine(object):
             managed_objects = managed_objects_filtered
 
         unique_identifiers = [attributes.UniqueIdentifier(
-                            str(managed_object.unique_identifier))
-                            for managed_object in managed_objects]
+            str(managed_object.unique_identifier))
+            for managed_object in managed_objects]
 
         response_payload = locate.LocateResponsePayload(
             unique_identifiers=unique_identifiers
